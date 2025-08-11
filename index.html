@@ -1,0 +1,174 @@
+<!--
+Bag Survey HTML Template
+- Shows 30 bags (B00 - B29), 3 images per bag.
+- Each bag has a checkbox labelled with the series number (e.g., B00).
+- Replace WEB_APP_URL with your Apps Script Web App URL.
+- Replace image src values with your Google Drive / hosted image URLs or local paths.
+
+How to use:
+1. Save this file as `bag-survey-template.html`.
+2. Replace the WEB_APP_URL value in the <script> below.
+3. Replace placeholder image paths (images/B00-1.jpg...) with your real URLs.
+4. Host the file (GitHub Pages / Netlify / open locally) and open it in a browser.
+5. Select boxes, click Submit — responses will be saved in your Google Sheet.
+
+Note: Your Apps Script accepts POSTs (doPost). If you want to preview the page in a browser
+without deploying the script, ignore any doGet errors — submissions require the Web App URL.
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bag Survey</title>
+  <style>
+    body{font-family:Inter,Segoe UI,Arial,sans-serif;margin:0;background:#f5f7fb;color:#222}
+    .container{max-width:1100px;margin:24px auto;padding:18px;background:#fff;border-radius:8px;box-shadow:0 6px 18px rgba(20,30,60,0.06)}
+    h1{margin:0 0 12px;font-size:20px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+    .card{background:#fafafa;border:1px solid #e6e9ef;padding:12px;border-radius:8px;display:flex;flex-direction:column;align-items:center}
+    .images{display:flex;gap:6px;justify-content:center;margin-bottom:8px}
+    .images img{width:78px;height:78px;object-fit:cover;border-radius:6px;border:1px solid #ddd}
+    .series{display:flex;align-items:center;gap:8px}
+    .series input{transform:scale(1.2)}
+    .controls{display:flex;align-items:center;justify-content:space-between;margin-top:16px}
+    button{background:#1266f1;color:#fff;border:none;padding:10px 14px;border-radius:6px;cursor:pointer}
+    button:disabled{opacity:0.6;cursor:not-allowed}
+    .status{font-size:14px}
+    .note{font-size:13px;color:#666;margin-bottom:8px}
+    @media (max-width:520px){.images img{width:64px;height:64px}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Bag Preference Survey</h1>
+    <p class="note">Select all bag series numbers you like (multiple selection allowed). Replace placeholders with your images and Apps Script URL.</p>
+
+    <form id="surveyForm">
+      <div class="grid" id="bagGrid">
+        <!-- Cards will be injected here by JavaScript -->
+      </div>
+
+      <div class="controls">
+        <div class="status" id="status">0 selected</div>
+        <div>
+          <button type="button" id="submitBtn">Submit</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    // ============== CONFIG ============== 
+    // Replace this with your Apps Script Web App URL (the one you copied after deployment)
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxRs4zsFApwfG6pfVDLS_uN6Obwlj7nKsUSjwahxnPassa8fEygJ-Eza3jicojHFWShSg/exec";
+
+    // Replace image paths with your image URLs (Drive links or hosted URLs). Format used below:
+    // images for bag B00: images/B00-1.jpg, images/B00-2.jpg, images/B00-3.jpg
+    // You can also use https://drive.google.com/uc?export=view&id=FILE_ID for public Drive images
+
+    // ============== DATA ==============
+    // Generate 30 bag entries B00..B29
+    const bags = Array.from({length:30}, (_,i) => {
+      const id = String(i).padStart(2,'0');
+      return {
+        series: `B${id}`,
+        // placeholder image paths - replace these
+        images: [
+          `images/B${id}-1.jpg`,
+          `images/B${id}-2.jpg`,
+          `images/B${id}-3.jpg`
+        ]
+      };
+    });
+
+    // ============== RENDER ==============
+    const bagGrid = document.getElementById('bagGrid');
+    function render() {
+      bagGrid.innerHTML = '';
+      for (const bag of bags) {
+        const card = document.createElement('div');
+        card.className = 'card';
+
+        const imagesWrap = document.createElement('div');
+        imagesWrap.className = 'images';
+        for (const src of bag.images) {
+          const img = document.createElement('img');
+          img.src = src; // replace with real urls
+          img.alt = bag.series;
+          imagesWrap.appendChild(img);
+        }
+
+        const seriesWrap = document.createElement('label');
+        seriesWrap.className = 'series';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.name = 'bag';
+        input.value = bag.series;
+        input.addEventListener('change', updateStatus);
+
+        const span = document.createElement('span');
+        span.textContent = bag.series;
+
+        seriesWrap.appendChild(input);
+        seriesWrap.appendChild(span);
+
+        card.appendChild(imagesWrap);
+        card.appendChild(seriesWrap);
+        bagGrid.appendChild(card);
+      }
+    }
+
+    function updateStatus(){
+      const checked = document.querySelectorAll('input[name="bag"]:checked').length;
+      document.getElementById('status').textContent = `${checked} selected`;
+    }
+
+    // ============== SUBMIT ==============
+    document.getElementById('submitBtn').addEventListener('click', async function(){
+      const checked = Array.from(document.querySelectorAll('input[name="bag"]:checked')).map(i=>i.value);
+      if(checked.length===0){
+        alert('Please select at least one bag.');
+        return;
+      }
+
+      // disable button while submitting
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = 'Submitting...';
+
+      try{
+        const res = await fetch(WEB_APP_URL, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({selectedBags: checked})
+        });
+
+        if(!res.ok){
+          throw new Error('Network response was not ok ' + res.status);
+        }
+
+        const data = await res.json();
+        if(data && data.status === 'success'){
+          alert('Thank you — your selections have been saved.');
+          // reset form
+          document.getElementById('surveyForm').reset();
+          updateStatus();
+        } else {
+          alert('Saved but returned unexpected response.');
+        }
+      } catch(err){
+        console.error(err);
+        alert('Failed to save. Check console and your Web App URL / deployment settings.');
+      } finally{
+        btn.disabled = false;
+        btn.textContent = 'Submit';
+      }
+    });
+
+    // initial render
+    render();
+  </script>
+</body>
+</html>
